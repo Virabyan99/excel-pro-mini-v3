@@ -35,5 +35,6 @@ export function useStoreActions() {
   if (!store) throw new Error('StoreProvider missing above in React tree');
   return {
     setRows: store.getState().setRows,
+    setSelection: store.getState().setSelection,
   };
 }

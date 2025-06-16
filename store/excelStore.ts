@@ -15,19 +15,29 @@ interface GridSlice {
   rows: { id: number; cells: string[] }[];
 }
 
-export type RootState = WorkbookSlice & UiSlice & GridSlice;
+interface SelectionSlice {
+  selection: {
+    start: { row: number; col: number } | null;
+    end: { row: number; col: number } | null;
+  };
+  setSelection: (selection: { start: { row: number; col: number }; end: { row: number; col: number } }) => void;
+}
+
+export type RootState = WorkbookSlice & UiSlice & GridSlice & SelectionSlice;
 
 // Initial state for SSR
-export const initialState: RootState = {
+export const initialState: Omit<RootState, 'setSelection'> = {
   workbooks: {},
   theme: 'light',
   rows: [],
+  selection: { start: null, end: null },
 };
 
 // Root State Initializer
 const rootInitializer = (set: any, get: any) => ({
   ...initialState,
   setRows: (rows: { id: number; cells: string[] }[]) => set({ rows }),
+  setSelection: (selection: { start: { row: number; col: number }; end: { row: number; col: number } }) => set({ selection }),
 });
 
 // Create Store with DevTools and Immer

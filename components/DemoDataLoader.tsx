@@ -6,7 +6,7 @@ export function DemoDataLoader() {
   const { setRows } = useStoreActions();
 
   useEffect(() => {
-    const demo = Array.from({ length: 100 }, (_, r) => ({
+    const demo = Array.from({ length: 10_000 }, (_, r) => ({
       id: r,
       cells: Array.from({ length: 10 }, (_, c) => `R${r + 1}C${c + 1}`),
     }));

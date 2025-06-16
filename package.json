@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.13.10",
     "clsx": "^2.1.1",
     "immer": "^10.1.1",
     "next": "15.3.3",

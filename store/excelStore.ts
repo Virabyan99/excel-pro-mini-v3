@@ -23,14 +23,22 @@ interface SelectionSlice {
   setSelection: (selection: { start: { row: number; col: number }; end: { row: number; col: number } }) => void;
 }
 
-export type RootState = WorkbookSlice & UiSlice & GridSlice & SelectionSlice;
+interface EditingSlice {
+  editingCell: { row: number; col: number } | null;
+  setEditingCell: (rc: { row: number; col: number } | null) => void;
+  setCellValue: (rc: { row: number; col: number; value: string }) => void;
+}
+
+// Combine all slices into RootState
+export type RootState = WorkbookSlice & UiSlice & GridSlice & SelectionSlice & EditingSlice;
 
 // Initial state for SSR
-export const initialState: Omit<RootState, 'setSelection'> = {
+export const initialState: Omit<RootState, 'setSelection' | 'setEditingCell' | 'setCellValue'> = {
   workbooks: {},
   theme: 'light',
   rows: [],
   selection: { start: null, end: null },
+  editingCell: null,
 };
 
 // Root State Initializer
@@ -38,6 +46,11 @@ const rootInitializer = (set: any, get: any) => ({
   ...initialState,
   setRows: (rows: { id: number; cells: string[] }[]) => set({ rows }),
   setSelection: (selection: { start: { row: number; col: number }; end: { row: number; col: number } }) => set({ selection }),
+  setEditingCell: (rc: { row: number; col: number } | null) => set({ editingCell: rc }),
+  setCellValue: ({ row, col, value }: { row: number; col: number; value: string }) =>
+    set((state: RootState) => {
+      state.rows[row].cells[col] = value;
+    }),
 });
 
 // Create Store with DevTools and Immer

@@ -11,6 +11,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef, useState } from 'react';
 import { useStore, useStoreActions } from './StoreProvider';
 import { useGridKeyboard } from '@/lib/useGridKeyboard';
+import { useCellEditor } from '@/lib/useCellEditor';
 
 interface SheetProps {
   sheetId: string;
@@ -23,6 +24,7 @@ export function Sheet({ sheetId, className }: SheetProps) {
   const data = useStore((s) => s.rows);
   const selection = useStore((s) => s.selection);
   const { setSelection } = useStoreActions();
+  const { editingCell, startEdit, handleKey, commitEdit } = useCellEditor();
   const numCols = data.length > 0 ? data[0].cells.length : 0;
 
   // Dynamically generate columns based on data
@@ -104,6 +106,10 @@ export function Sheet({ sheetId, className }: SheetProps) {
     return row >= minRow && row <= maxRow && col >= minCol && col <= maxCol;
   };
 
+  // Helper to determine if a cell is being edited
+  const isEditing = (row: number, col: number) =>
+    editingCell && editingCell.row === row && editingCell.col === col;
+
   return (
     <div className={clsx('rounded-md border border-slate-200 bg-white', className)}>
       {/* Scroll container */}
@@ -147,7 +153,10 @@ export function Sheet({ sheetId, className }: SheetProps) {
                 >
                   {virtualCols.map((vc) => {
                     const cell = row.getVisibleCells()[vc.index];
-                    const selected = isSelected(row.index, cell.column.getIndex());
+                    const rowIdx = row.index;
+                    const colIdx = cell.column.getIndex();
+                    const selected = isSelected(rowIdx, colIdx);
+                    const editing = isEditing(rowIdx, colIdx);
                     return (
                       <td
                         key={cell.id}
@@ -158,11 +167,22 @@ export function Sheet({ sheetId, className }: SheetProps) {
                           selected && 'bg-indigo-100 ring-2 ring-indigo-500 ring-inset'
                         )}
                         style={{ left: vc.start, width: vc.size, height: vr.size }}
-                        onMouseDown={handleMouseDown(row.index, cell.column.getIndex())}
-                        onMouseOver={handleMouseOver(row.index, cell.column.getIndex())}
+                        onMouseDown={handleMouseDown(rowIdx, colIdx)}
+                        onMouseOver={handleMouseOver(rowIdx, colIdx)}
                         onMouseUp={handleMouseUp}
+                        onDoubleClick={() => startEdit(rowIdx, colIdx)}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {editing ? (
+                          <input
+                            className="w-full h-full text-center outline-none"
+                            defaultValue={String(cell.getValue())}
+                            autoFocus
+                            onBlur={(e) => commitEdit(rowIdx, colIdx, e.currentTarget.value)}
+                            onKeyDown={(e) => handleKey(e, rowIdx, colIdx)}
+                          />
+                        ) : (
+                          flexRender(cell.column.columnDef.cell, cell.getContext())
+                        )}
                       </td>
                     );
                   })}

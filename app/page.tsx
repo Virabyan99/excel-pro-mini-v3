@@ -1,14 +1,11 @@
-import { Sheet } from '@/components/Sheet';
+import React from 'react';
 
-interface PageProps {
-  params: { wbId: string; sheetId: string };
-}
-
-export default function SheetPage({ params }: PageProps) {
-  const { wbId, sheetId } = params;
+const HomePage = () => {
   return (
-    <main className="flex min-h-screen items-start justify-center p-8">
-      <Sheet sheetId={`${wbId}/${sheetId}`} />
-    </main>
+    <div>
+      Homepage
+    </div>
   );
-}
+};
+
+export default HomePage;

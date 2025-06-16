@@ -1,6 +1,6 @@
-import { createStore, type StoreApi } from 'zustand';
-import { immer } from 'zustand/middleware/immer';
-import { devtools } from 'zustand/middleware';
+import { createStore } from "zustand";
+import { devtools } from "zustand/middleware";
+import { immer } from "zustand/middleware/immer";
 
 // Define Slices
 interface WorkbookSlice {
@@ -11,18 +11,29 @@ interface UiSlice {
   theme: 'light' | 'dark';
 }
 
-export type RootState = WorkbookSlice & UiSlice;
+interface GridSlice {
+  rows: { id: number; cells: string[] }[];
+}
 
-// Root State Initializer
-const rootInitializer = immer<RootState>(() => ({
+export type RootState = WorkbookSlice & UiSlice & GridSlice;
+
+// Initial state for SSR
+export const initialState: RootState = {
   workbooks: {},
   theme: 'light',
-}));
+  rows: [],
+};
 
-// Create Store with DevTools
+// Root State Initializer
+const rootInitializer = (set: any, get: any) => ({
+  ...initialState,
+  setRows: (rows: { id: number; cells: string[] }[]) => set({ rows }),
+});
+
+// Create Store with DevTools and Immer
 const enhancer =
   process.env.NODE_ENV === 'development'
-    ? devtools
-    : <S extends object>(f: (set: any) => S) => f;
+    ? (config: any) => devtools(immer(config))
+    : immer;
 
-export const createRootStore = () => createStore(enhancer(immer(rootInitializer)));
+export const createRootStore = () => createStore(enhancer(rootInitializer));

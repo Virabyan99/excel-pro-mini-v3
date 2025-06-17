@@ -19,50 +19,6 @@
   }
 }
 
-/* @layer utilities {
-  .sticky-header {
-    position: sticky;
-    top: 0;
-    z-index: 20; 
-  }
-  .sticky-left {
-    position: sticky;
-    left: 0;
-    
-    z-index: 10; 
-  }
-  .sticky-corner {
-    position: sticky;
-    top: 0;
-    left: 0;
-    z-index: 30; 
-  }
-}
-
-.header-corner {
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  z-index: 30;
-}
-
-.column-header {
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  z-index: 20;
-  top: 0;
-}
-
-.row-header {
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  z-index: 10;
-  
-}
-
-.data-cell {
-  border: 1px solid #ccc;
-  background-color: white;
-} */
 
 body {
   background: var(--background);

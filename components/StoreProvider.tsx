@@ -40,5 +40,7 @@ export function useStoreActions() {
     setCellValue: store.getState().setCellValue,
     setColWidth: store.getState().setColWidth,
     setRowHeight: store.getState().setRowHeight,
+    undo: store.getState().undo,
+    redo: store.getState().redo,
   };
 }

@@ -29,16 +29,25 @@ interface EditingSlice {
   setCellValue: (rc: { row: number; col: number; value: string }) => void;
 }
 
+interface DimensionSlice {
+  colWidths: Record<number, number>; // px, by column index
+  rowHeights: Record<number, number>; // px, by row index
+  setColWidth: (idx: number, px: number) => void;
+  setRowHeight: (idx: number, px: number) => void;
+}
+
 // Combine all slices into RootState
-export type RootState = WorkbookSlice & UiSlice & GridSlice & SelectionSlice & EditingSlice;
+export type RootState = WorkbookSlice & UiSlice & GridSlice & SelectionSlice & EditingSlice & DimensionSlice;
 
 // Initial state for SSR
-export const initialState: Omit<RootState, 'setSelection' | 'setEditingCell' | 'setCellValue'> = {
+export const initialState: Omit<RootState, 'setSelection' | 'setEditingCell' | 'setCellValue' | 'setColWidth' | 'setRowHeight'> = {
   workbooks: {},
   theme: 'light',
   rows: [],
   selection: { start: null, end: null },
   editingCell: null,
+  colWidths: {},
+  rowHeights: {},
 };
 
 // Root State Initializer
@@ -51,6 +60,12 @@ const rootInitializer = (set: any, get: any) => ({
     set((state: RootState) => {
       state.rows[row].cells[col] = value;
     }),
+  setColWidth: (idx: number, px: number) => set((state: RootState) => {
+    state.colWidths[idx] = px;
+  }),
+  setRowHeight: (idx: number, px: number) => set((state: RootState) => {
+    state.rowHeights[idx] = px;
+  }),
 });
 
 // Create Store with DevTools and Immer

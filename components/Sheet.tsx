@@ -8,34 +8,60 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore, useStoreActions } from './StoreProvider';
 import { useGridKeyboard } from '@/lib/useGridKeyboard';
 import { useCellEditor } from '@/lib/useCellEditor';
+import { throttle } from '@/lib/throttle';
 
 interface SheetProps {
   sheetId: string;
   className?: string;
 }
 
-const colHelper = createColumnHelper<{ id: number; cells: string[] }>();
+interface Row {
+  id: number;
+  cells: string[];
+}
+
+const colHelper = createColumnHelper<Row>();
 
 export function Sheet({ sheetId, className }: SheetProps) {
   const data = useStore((s) => s.rows);
   const selection = useStore((s) => s.selection);
-  const { setSelection } = useStoreActions();
-  const { editingCell, startEdit, handleKey, commitEdit } = useCellEditor();
+  const colWidths = useStore((s) => s.colWidths);
+  const rowHeights = useStore((s) => s.rowHeights);
+  const { setSelection, setColWidth, setRowHeight } = useStoreActions();
+  const { editingCell, startEdit, commitEdit, handleKey } = useCellEditor();
   const numCols = data.length > 0 ? data[0].cells.length : 0;
+  const headerHeight = 32;
 
-  // Dynamically generate columns based on data
-  const columns: ColumnDef<{ id: number; cells: string[] }>[] = Array.from(
-    { length: numCols },
-    (_, c) =>
-      colHelper.accessor((row) => row.cells[c], {
-        id: `col-${c}`,
-        header: () => `Col ${c + 1}`,
-        cell: (ctx) => ctx.getValue(),
-      })
+  // Memoized row number column
+  const rowNumberCol = useMemo<ColumnDef<Row>>(
+    () => ({
+      id: '#',
+      header: () => null,
+      cell: (ctx) => ctx.row.index + 1,
+      size: colWidths[0] || 48,
+      meta: { isRowHeader: true },
+    }),
+    [colWidths]
+  );
+
+  // Memoized data columns
+  const columns: ColumnDef<Row>[] = useMemo(
+    () => [
+      rowNumberCol,
+      ...Array.from({ length: numCols }, (_, c) =>
+        colHelper.accessor((row) => row.cells[c], {
+          id: String.fromCharCode(65 + c),
+          header: () => String.fromCharCode(65 + c),
+          cell: (ctx) => ctx.getValue() || '',
+          size: colWidths[c + 1] || 128,
+        })
+      ),
+    ],
+    [numCols, colWidths, rowNumberCol]
   );
 
   const table = useReactTable({
@@ -44,152 +70,236 @@ export function Sheet({ sheetId, className }: SheetProps) {
     getCoreRowModel: getCoreRowModel(),
   });
 
-  // Virtualization setup
   const parentRef = useRef<HTMLDivElement>(null);
 
-  // Row virtualizer
-  const rowVirtualizer = useVirtualizer({
-    count: table.getRowModel().rows.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 32,
-    overscan: 5,
-  });
-  const virtualRows = rowVirtualizer.getVirtualItems();
-  const totalHeight = rowVirtualizer.getTotalSize();
+  // Memoized estimateSize for columns
+  const estimateColSize = useCallback(
+    (index: number) => colWidths[index] ?? (index === 0 ? 48 : 128),
+    [colWidths]
+  );
 
-  // Column virtualizer
-  const colCount = table.getAllColumns().length;
   const colVirtualizer = useVirtualizer({
     horizontal: true,
-    count: colCount,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 128,
+    count: numCols + 1,
+    estimateSize: estimateColSize,
     overscan: 3,
+    getScrollElement: () => parentRef.current,
   });
-  const virtualCols = colVirtualizer.getVirtualItems();
-  const totalWidth = colVirtualizer.getTotalSize();
 
-  // Keyboard navigation
+  const rowVirtualizer = useVirtualizer({
+    count: data.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: (index) => rowHeights[index] ?? 32,
+    overscan: 5,
+  });
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const virtualCols = colVirtualizer.getVirtualItems();
+
+  useEffect(() => {
+    colVirtualizer.measure();
+  }, [colWidths]);
+
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [rowHeights]);
+
   useGridKeyboard(data.length, numCols);
 
-  // Selection state
   const [isSelecting, setIsSelecting] = useState(false);
 
+const handleColResize = (colIndex: number, e: React.MouseEvent) => {
+  e.stopPropagation();
+  const startX = e.clientX;
+  const startWidth = colWidths[colIndex] ?? columns[colIndex].size;
+  let currentWidth = startWidth; // Track the latest width
+
+  const throttledSetColWidth = throttle((newWidth: number) => {
+    currentWidth = newWidth; // Update currentWidth with each throttled call
+    setColWidth(colIndex, newWidth);
+  }, 16);
+
+  const onMouseMove = (e: MouseEvent) => {
+    const newWidth = Math.max(48, startWidth + (e.clientX - startX));
+    throttledSetColWidth(newWidth);
+  };
+
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    setColWidth(colIndex, currentWidth); // Use the last known width
+  };
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+};
+
+const handleRowResize = (rowIndex: number, e: React.MouseEvent) => {
+  e.stopPropagation();
+  const startY = e.clientY;
+  const startHeight = rowHeights[rowIndex] ?? 32;
+  let currentHeight = startHeight; // Track the latest height
+
+  const throttledSetRowHeight = throttle((newHeight: number) => {
+    currentHeight = newHeight; // Update currentHeight with each throttled call
+    setRowHeight(rowIndex, newHeight);
+  }, 16);
+
+  const onMouseMove = (e: MouseEvent) => {
+    const newHeight = Math.max(24, startHeight + (e.clientY - startY));
+    throttledSetRowHeight(newHeight);
+  };
+
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    setRowHeight(rowIndex, currentHeight); // Use the last known height
+  };
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+};
+
+  const autoSizeCol = (colIndex: number) => {
+    const cells = document.querySelectorAll(`td[data-col='${colIndex}']`);
+    let max = 48;
+    cells.forEach((c) => {
+      const w = (c as HTMLElement).scrollWidth + 16;
+      if (w > max) max = w;
+    });
+    setColWidth(colIndex, max);
+  };
+
+  const autoSizeRow = (rowIndex: number) => {
+    const cells = document.querySelectorAll(`td[data-row='${rowIndex}']`);
+    let max = 24;
+    cells.forEach((c) => {
+      const h = (c as HTMLElement).scrollHeight + 8;
+      if (h > max) max = h;
+    });
+    setRowHeight(rowIndex, max);
+  };
+
+  const isSelected = (row: number, col: number) => {
+    if (!selection.start || !selection.end || col === 0) return false;
+    const dataCol = col - 1;
+    const minRow = Math.min(selection.start.row, selection.end.row);
+    const maxRow = Math.max(selection.start.row, selection.end.row);
+    const minCol = Math.min(selection.start.col, selection.end.col);
+    const maxCol = Math.max(selection.start.col, selection.end.col);
+    return row >= minRow && row <= maxRow && dataCol >= minCol && dataCol <= maxCol;
+  };
+
+  const isEditing = (row: number, col: number) =>
+    col > 0 && editingCell && editingCell.row === row && editingCell.col === col - 1;
+
   const handleMouseDown = (row: number, col: number) => (e: React.MouseEvent) => {
+    if (col === 0) return;
+    const dataCol = col - 1;
     if (e.shiftKey && selection.start) {
-      // Extend selection with Shift+Click
-      setSelection({ start: selection.start, end: { row, col } });
+      setSelection({ start: selection.start, end: { row, col: dataCol } });
     } else {
-      // Start new selection
-      setSelection({ start: { row, col }, end: { row, col } });
+      setSelection({ start: { row, col: dataCol }, end: { row, col: dataCol } });
       setIsSelecting(true);
     }
   };
 
   const handleMouseOver = (row: number, col: number) => (e: React.MouseEvent) => {
-    if (isSelecting) {
-      setSelection({ start: selection.start!, end: { row, col } });
+    if (isSelecting && col !== 0) {
+      const dataCol = col - 1;
+      setSelection({ start: selection.start!, end: { row, col: dataCol } });
     }
   };
 
-  const handleMouseUp = () => {
-    setIsSelecting(false);
-  };
-
-  // Helper to determine if a cell is in the selected range
-  const isSelected = (row: number, col: number) => {
-    if (!selection.start || !selection.end) return false;
-    const minRow = Math.min(selection.start.row, selection.end.row);
-    const maxRow = Math.max(selection.start.row, selection.end.row);
-    const minCol = Math.min(selection.start.col, selection.end.col);
-    const maxCol = Math.max(selection.start.col, selection.end.col);
-    return row >= minRow && row <= maxRow && col >= minCol && col <= maxCol;
-  };
-
-  // Helper to determine if a cell is being edited
-  const isEditing = (row: number, col: number) =>
-    editingCell && editingCell.row === row && editingCell.col === col;
+  const handleMouseUp = () => setIsSelecting(false);
 
   return (
     <div className={clsx('rounded-md border border-slate-200 bg-white', className)}>
-      {/* Scroll container */}
       <div ref={parentRef} className="h-[500px] w-[95vw] overflow-auto">
-        <table
-          role="grid"
-          className="text-sm select-none border-collapse"
-          style={{ height: totalHeight, width: totalWidth }}
-        >
+        <table className="text-sm select-none border-collapse" style={{ width: '100%' }}>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} role="row" style={{ position: 'relative', height: 32 }}>
+              <tr key={headerGroup.id} style={{ position: 'sticky', top: 0, zIndex: 20 }}>
                 {virtualCols.map((vc) => {
                   const header = headerGroup.headers[vc.index];
+                  const isRowHeader = header.column.id === '#';
                   return (
                     <th
                       key={header.id}
-                      className="border border-slate-200 bg-slate-50 font-medium absolute top-0"
-                      style={{ left: vc.start, width: vc.size }}
+                      className={clsx(
+                        'border bg-slate-50 font-medium relative',
+                        isRowHeader && 'sticky left-0 z-30'
+                      )}
+                      style={{ width: header.column.size, height: headerHeight }}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
+                      {!isRowHeader && (
+                        <div
+                          className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-indigo-200 z-40"
+                          style={{ transform: 'translateX(100%)' }}
+                          onMouseDown={(e) => handleColResize(vc.index, e)}
+                          onDoubleClick={() => autoSizeCol(vc.index)}
+                        />
+                      )}
                     </th>
                   );
                 })}
               </tr>
             ))}
           </thead>
-          <tbody style={{ position: 'relative', height: totalHeight }}>
-            {virtualRows.map((vr) => {
-              const row = table.getRowModel().rows[vr.index];
-              return (
-                <tr
-                  key={row.id}
-                  role="row"
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    transform: `translateY(${vr.start}px)`,
-                    height: vr.size,
-                  }}
-                >
-                  {virtualCols.map((vc) => {
-                    const cell = row.getVisibleCells()[vc.index];
-                    const rowIdx = row.index;
-                    const colIdx = cell.column.getIndex();
-                    const selected = isSelected(rowIdx, colIdx);
-                    const editing = isEditing(rowIdx, colIdx);
-                    return (
-                      <td
-                        key={cell.id}
-                        role="gridcell"
-                        aria-selected={selected}
-                        className={clsx(
-                          'border border-slate-100 text-center absolute',
-                          selected && 'bg-indigo-100 ring-2 ring-indigo-500 ring-inset'
-                        )}
-                        style={{ left: vc.start, width: vc.size, height: vr.size }}
-                        onMouseDown={handleMouseDown(rowIdx, colIdx)}
-                        onMouseOver={handleMouseOver(rowIdx, colIdx)}
-                        onMouseUp={handleMouseUp}
-                        onDoubleClick={() => startEdit(rowIdx, colIdx)}
-                      >
-                        {editing ? (
-                          <input
-                            className="w-full h-full text-center outline-none"
-                            defaultValue={String(cell.getValue())}
-                            autoFocus
-                            onBlur={(e) => commitEdit(rowIdx, colIdx, e.currentTarget.value)}
-                            onKeyDown={(e) => handleKey(e, rowIdx, colIdx)}
-                          />
-                        ) : (
-                          flexRender(cell.column.columnDef.cell, cell.getContext())
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
+<tbody>
+  {virtualRows.map((vr) => {
+    const row = table.getRowModel().rows[vr.index];
+    return (
+      <tr key={row.id} style={{ height: rowHeights[row.index] ?? 32 }}>
+        {virtualCols.map((vc) => {
+          const cell = row.getVisibleCells()[vc.index];
+          const rowIdx = row.index;
+          const colIdx = vc.index;
+          const isRowHeader = cell.column.columnDef.meta?.isRowHeader;
+          const selected = isSelected(rowIdx, colIdx);
+          const editing = isEditing(rowIdx, colIdx);
+          return (
+            <td
+              key={cell.id}
+              className={clsx(
+                'border text-center relative',
+                isRowHeader && 'sticky left-0 z-10 bg-slate-50',
+                selected && 'outline outline-2 outline-indigo-500'
+              )}
+              style={{ width: columns[colIdx].size }}
+              onMouseDown={handleMouseDown(rowIdx, colIdx)}
+              onMouseOver={handleMouseOver(rowIdx, colIdx)}
+              onMouseUp={handleMouseUp}
+              onDoubleClick={() => !isRowHeader && startEdit(rowIdx, colIdx - 1)}
+              data-row={rowIdx}
+              data-col={colIdx}
+            >
+              {editing ? (
+                <input
+                  className="w-full h-full text-center outline-none"
+                  defaultValue={String(cell.getValue())}
+                  autoFocus
+                  onBlur={(e) => commitEdit(rowIdx, colIdx - 1, e.currentTarget.value)}
+                  onKeyDown={(e) => handleKey(e, rowIdx, colIdx - 1)}
+                />
+              ) : (
+                flexRender(cell.column.columnDef.cell, cell.getContext())
+              )}
+              {isRowHeader && (
+                <div
+                  className="absolute bottom-[-2px] left-0 w-full h-4 cursor-row-resize bg-transparent hover:bg-indigo-200 z-40"
+                  onMouseDown={(e) => handleRowResize(rowIdx, e)}
+                  onDoubleClick={() => autoSizeRow(rowIdx)}
+                />
+              )}
+            </td>
+          );
+        })}
+      </tr>
+    );
+  })}
+</tbody>
         </table>
       </div>
       <p className="p-2 text-xs text-slate-400">sheetId: {sheetId}</p>

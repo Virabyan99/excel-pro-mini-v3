@@ -38,5 +38,7 @@ export function useStoreActions() {
     setSelection: store.getState().setSelection,
     setEditingCell: store.getState().setEditingCell,
     setCellValue: store.getState().setCellValue,
+    setColWidth: store.getState().setColWidth,
+    setRowHeight: store.getState().setRowHeight,
   };
 }

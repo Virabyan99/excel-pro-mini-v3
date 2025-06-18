@@ -1,5 +1,7 @@
 import { Sheet } from '@/components/Sheet';
 
+export const runtime = 'edge';
+
 interface PageProps {
   params: Promise<{ wbId: string; sheetId: string }>;
 }

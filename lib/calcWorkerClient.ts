@@ -1,4 +1,3 @@
-// src/lib/calcWorkerClient.ts
 import * as Comlink from 'comlink';
 import type { CalcWorkerApi } from '@/workers/calcWorker';
 

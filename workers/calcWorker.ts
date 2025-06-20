@@ -50,6 +50,7 @@ async function evaluateFormula(formula: string, scope: Record<string, any>): Pro
 const depGraph = new DepGraph();
 const cellFormulas = new Map<string, string>();
 const listeners = new Set<(ids: string[]) => void>(); // For cycle event listeners
+let lastBatchSize = 0; // Add this global variable
 
 function emitCycle(ids: string[]) {
   listeners.forEach((cb) => cb(ids));
@@ -125,14 +126,18 @@ const api = {
     return result;
   },
   batch: async (items: { id: string; formula: string; scope: Record<string, any> }[]) => {
+    lastBatchSize = items.length; // Store the batch size
+    performance.mark('batch:start');
     const results: Record<string, ExcelValue> = {};
     for (const item of items) {
       if (depGraph.isInCycle(item.id)) {
-        results[item.id] = toExcelError('CYCLE'); // Return #CYCLE! for cyclic cells
+        results[item.id] = toExcelError('CYCLE');
       } else {
         results[item.id] = await evaluateFormula(item.formula, item.scope);
       }
     }
+    performance.mark('batch:end');
+    performance.measure('batch', 'batch:start', 'batch:end');
     return results;
   },
   onCycle: (cb: (ids: string[]) => void) => {
@@ -142,6 +147,18 @@ const api = {
     listeners.delete(cb); // Unregister cycle listener
   },
 };
+
+if (process.env.NODE_ENV === 'development') {
+  self.addEventListener('message', () => {
+    const measures = performance.getEntriesByName('batch').pop();
+    if (measures) {
+      // eslint-disable-next-line no-console
+      console.table([{ Cells: lastBatchSize, 'Time ms': measures.duration.toFixed(2) }]);
+      performance.clearMeasures('batch');
+      lastBatchSize = 0; // Reset after logging
+    }
+  });
+}
 
 export type CalcWorkerApi = typeof api;
 

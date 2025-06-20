@@ -1,24 +1,122 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+[dir="rtl"] .cursor-col-resize {
+  cursor: ew-resize;
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: #ffffff; /* Your original light background */
+  --foreground: #171717; /* Your original light foreground */
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #171717;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5; /* Light gray for secondary elements */
+  --secondary-foreground: #171717;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a; /* Softer gray for muted text */
+  --accent: #f4f4f5;
+  --accent-foreground: #171717;
+  --destructive: #ef4444; /* Red for destructive actions */
+  --border: #e4e4e7; /* Light border for grid lines */
+  --input: #e4e4e7;
+  --ring: #a1a1aa; /* Subtle ring color */
+  --chart-1: #f59e0b;
+  --chart-2: #10b981;
+  --chart-3: #3b82f6;
+  --chart-4: #8b5cf6;
+  --chart-5: #ec4899;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #171717;
+  --sidebar-primary: #171717;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #171717;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #a1a1aa;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0a0a0a; /* Your original dark background */
+    --foreground: #ededed; /* Your original dark foreground */
+    --card: #0a0a0a;
+    --card-foreground: #ededed;
+    --popover: #0a0a0a;
+    --popover-foreground: #ededed;
+    --primary: #ededed;
+    --primary-foreground: #0a0a0a;
+    --secondary: #27272a; /* Darker gray for secondary */
+    --secondary-foreground: #ededed;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa; /* Lighter gray for muted text */
+    --accent: #27272a;
+    --accent-foreground: #ededed;
+    --destructive: #ef4444;
+    --border: #27272a; /* Dark border for grid lines */
+    --input: #27272a;
+    --ring: #52525b; /* Darker ring color */
+    --chart-1: #f59e0b;
+    --chart-2: #10b981;
+    --chart-3: #3b82f6;
+    --chart-4: #8b5cf6;
+    --chart-5: #ec4899;
+    --sidebar: #0a0a0a;
+    --sidebar-foreground: #ededed;
+    --sidebar-primary: #ededed;
+    --sidebar-primary-foreground: #0a0a0a;
+    --sidebar-accent: #27272a;
+    --sidebar-accent-foreground: #ededed;
+    --sidebar-border: #27272a;
+    --sidebar-ring: #52525b;
   }
 }
-
 
 body {
   background: var(--background);
@@ -26,8 +124,10 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-[dir="rtl"] .cursor-col-resize {
-  cursor: ew-resize;
+/* Adjust @layer base to avoid global conflicts */
+@layer base {
+  /* Remove global * selector to prevent overriding grid styles */
+  body {
+    @apply bg-background text-foreground;
+  }
 }
-
-

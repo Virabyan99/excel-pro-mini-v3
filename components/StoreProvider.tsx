@@ -49,5 +49,6 @@ export function useStoreActions() {
     setRowHeight: store.getState().setRowHeight,
     undo: store.getState().undo,
     redo: store.getState().redo,
+    setCycles: store.getState().setCycles, // Add this line
   };
 }

@@ -61,6 +61,11 @@ interface CalcSlice {
   clearDirty: () => void;
 }
 
+interface CycleSlice {
+  cycles: Set<string>; // Track cells in cycles
+  setCycles: (ids: string[]) => void; // Action to update cycles
+}
+
 export type RootState = WorkbookSlice &
   UiSlice &
   GridSlice &
@@ -68,7 +73,8 @@ export type RootState = WorkbookSlice &
   EditingSlice &
   DimensionSlice &
   UndoSlice &
-  CalcSlice;
+  CalcSlice &
+  CycleSlice;
 
 export const initialState: Omit<
   RootState,
@@ -81,6 +87,7 @@ export const initialState: Omit<
   | 'redo'
   | 'markDirty'
   | 'clearDirty'
+  | 'setCycles'
 > = {
   workbooks: {},
   theme: 'light',
@@ -93,6 +100,7 @@ export const initialState: Omit<
   future: [],
   formulas: {},
   dirty: new Set(),
+  cycles: new Set<string>(), // Initialize cycles in state
 };
 
 const withHistory =
@@ -146,7 +154,7 @@ const rootInitializer = (set: any, get: any) => {
           }
           draft.dirty.add(cellId);
         }
-        console.log('Set:', { cellId, value, formulas: draft.formulas, dirty: draft.dirty }); // Added console log
+        console.log('Set:', { cellId, value, formulas: draft.formulas, dirty: draft.dirty });
       }
     ),
     setColWidth: (idx: number, px: number) =>
@@ -179,6 +187,7 @@ const rootInitializer = (set: any, get: any) => {
     },
     markDirty: (id: string) => set((state: RootState) => void state.dirty.add(id)),
     clearDirty: () => set((state: RootState) => void state.dirty.clear()),
+    setCycles: (ids: string[]) => set({ cycles: new Set(ids) }), // Action to update cycles
   };
 };
 

@@ -13,6 +13,8 @@ import { useStore, useStoreActions } from './StoreProvider'
 import { useGridKeyboard } from '@/lib/useGridKeyboard'
 import { useCellEditor } from '@/lib/useCellEditor'
 import { throttle } from '@/lib/throttle'
+import { getCalcWorker } from '@/lib/calcWorkerClient'
+import * as Comlink from 'comlink'
 
 interface SheetProps {
   sheetId: string
@@ -31,7 +33,8 @@ export function Sheet({ sheetId, className }: SheetProps) {
   const selection = useStore((s) => s.selection)
   const colWidths = useStore((s) => s.colWidths)
   const rowHeights = useStore((s) => s.rowHeights)
-  const { setSelection, setColWidth, setRowHeight } = useStoreActions()
+  const cycles = useStore((s) => s.cycles) // Access cycles from store
+  const { setSelection, setColWidth, setRowHeight, setCycles } = useStoreActions()
   const { editingCell, startEdit, commitEdit, handleKey } = useCellEditor()
   const numCols = data.length > 0 ? data[0].cells.length : 0
   const headerHeight = 32
@@ -88,7 +91,7 @@ export function Sheet({ sheetId, className }: SheetProps) {
     horizontal: true,
     count: numCols + 1,
     estimateSize: estimateColSize,
-    overscan: 10, // Increased for smoother scrolling
+    overscan: 10,
     getScrollElement: () => parentRef.current,
   })
 
@@ -96,7 +99,7 @@ export function Sheet({ sheetId, className }: SheetProps) {
     count: data.length,
     getScrollElement: () => parentRef.current,
     estimateSize: estimateRowSize,
-    overscan: 10, // Increased for smoother scrolling
+    overscan: 10,
   })
 
   const virtualRows = rowVirtualizer.getVirtualItems()
@@ -119,81 +122,96 @@ export function Sheet({ sheetId, className }: SheetProps) {
 
   const [isSelecting, setIsSelecting] = useState(false)
 
-const handleColResize = (colIndex: number, e: React.MouseEvent) => {
-  if (typeof window === 'undefined') return; // Skip on server
-  e.stopPropagation();
-  const startX = e.clientX;
-  const startWidth = colWidths[colIndex] ?? columns[colIndex].size;
-  let currentWidth = startWidth;
+  // Set up cycle listener
+  useEffect(() => {
+    const setupCycleListener = async () => {
+      const worker = await getCalcWorker();
+      const listener = (ids: string[]) => {
+        setCycles(ids); // Update store with cycle cells
+      };
+      worker.onCycle(Comlink.proxy(listener));
+      return () => {
+        worker.offCycle(Comlink.proxy(listener));
+      };
+    };
+    setupCycleListener();
+  }, [setCycles]);
 
-  const throttledSetColWidth = throttle((newWidth: number) => {
-    currentWidth = newWidth;
-    setColWidth(colIndex, newWidth);
-  }, 16);
+  const handleColResize = (colIndex: number, e: React.MouseEvent) => {
+    if (typeof window === 'undefined') return;
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = colWidths[colIndex] ?? columns[colIndex].size;
+    let currentWidth = startWidth;
 
-  const onMouseMove = (e: MouseEvent) => {
-    const newWidth = Math.max(48, startWidth + (e.clientX - startX));
-    throttledSetColWidth(newWidth);
+    const throttledSetColWidth = throttle((newWidth: number) => {
+      currentWidth = newWidth;
+      setColWidth(colIndex, newWidth);
+    }, 16);
+
+    const onMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.max(48, startWidth + (e.clientX - startX));
+      throttledSetColWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      setColWidth(colIndex, currentWidth);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   };
 
-  const onMouseUp = () => {
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-    setColWidth(colIndex, currentWidth);
+  const handleRowResize = (rowIndex: number, e: React.MouseEvent) => {
+    if (typeof window === 'undefined') return;
+    e.stopPropagation();
+    const startY = e.clientY;
+    const startHeight = rowHeights[rowIndex] ?? 32;
+    let currentHeight = startHeight;
+
+    const throttledSetRowHeight = throttle((newHeight: number) => {
+      currentHeight = newHeight;
+      setRowHeight(rowIndex, newHeight);
+    }, 16);
+
+    const onMouseMove = (e: MouseEvent) => {
+      const newHeight = Math.max(24, startHeight + (e.clientY - startY));
+      throttledSetRowHeight(newHeight);
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      setRowHeight(rowIndex, currentHeight);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   };
 
-  document.addEventListener('mousemove', onMouseMove);
-  document.addEventListener('mouseup', onMouseUp);
-};
-
-const handleRowResize = (rowIndex: number, e: React.MouseEvent) => {
-  if (typeof window === 'undefined') return; // Skip on server
-  e.stopPropagation();
-  const startY = e.clientY;
-  const startHeight = rowHeights[rowIndex] ?? 32;
-  let currentHeight = startHeight;
-
-  const throttledSetRowHeight = throttle((newHeight: number) => {
-    currentHeight = newHeight;
-    setRowHeight(rowIndex, newHeight);
-  }, 16);
-
-  const onMouseMove = (e: MouseEvent) => {
-    const newHeight = Math.max(24, startHeight + (e.clientY - startY));
-    throttledSetRowHeight(newHeight);
+  const autoSizeCol = (colIndex: number) => {
+    if (typeof window === 'undefined') return;
+    const cells = document.querySelectorAll(`td[data-col='${colIndex}']`);
+    let max = 48;
+    cells.forEach((c) => {
+      const w = (c as HTMLElement).scrollWidth + 16;
+      if (w > max) max = w;
+    });
+    setColWidth(colIndex, max);
   };
 
-  const onMouseUp = () => {
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-    setRowHeight(rowIndex, currentHeight);
-  };
-
-  document.addEventListener('mousemove', onMouseMove);
-  document.addEventListener('mouseup', onMouseUp);
-};
-
-const autoSizeCol = (colIndex: number) => {
-  if (typeof window === 'undefined') return; // Skip on server
-  const cells = document.querySelectorAll(`td[data-col='${colIndex}']`);
-  let max = 48;
-  cells.forEach((c) => {
-    const w = (c as HTMLElement).scrollWidth + 16;
-    if (w > max) max = w;
-  });
-  setColWidth(colIndex, max);
-};
-
-const autoSizeRow = (rowIndex: number) => {
-  if (typeof window === 'undefined') return; // Skip on server
-  const cells = document.querySelectorAll(`td[data-row='${rowIndex}']`);
-  let max = 24;
-  cells.forEach((c) => {
-    const h = (c as HTMLElement).scrollHeight + 8;
-    if (h > max) max = h;
-  });
-  setRowHeight(rowIndex, max);
-}
+  const autoSizeRow = (rowIndex: number) => {
+    if (typeof window === 'undefined') return;
+    const cells = document.querySelectorAll(`td[data-row='${rowIndex}']`);
+    let max = 24;
+    cells.forEach((c) => {
+      const h = (c as HTMLElement).scrollHeight + 8;
+      if (h > max) max = h;
+    });
+    setRowHeight(rowIndex, max);
+  }
 
   const isSelected = (row: number, col: number) => {
     if (!selection.start || !selection.end || col === 0) return false
@@ -318,13 +336,16 @@ const autoSizeRow = (rowIndex: number) => {
                         cell.column.columnDef.meta?.isRowHeader
                       const selected = isSelected(rowIdx, colIdx)
                       const editing = isEditing(rowIdx, colIdx)
+                      const cellId = `R${rowIdx}C${colIdx - 1}` // Adjust for row header
+                      const hasCycle = cycles.has(cellId) // Check if cell is in a cycle
                       return (
                         <td
                           key={cell.id}
                           className={clsx(
                             'border text-center relative',
                             isRowHeader && 'sticky left-0 z-10 bg-slate-50',
-                            selected && 'outline outline-2 outline-indigo-500'
+                            selected && 'outline outline-2 outline-indigo-500',
+                            hasCycle && 'bg-red-100' // Highlight cells in cycles
                           )}
                           style={{
                             width: vc.size,
@@ -339,7 +360,12 @@ const autoSizeRow = (rowIndex: number) => {
                             !isRowHeader && startEdit(rowIdx, colIdx - 1)
                           }
                           data-row={rowIdx}
-                          data-col={colIdx}>
+                          data-col={colIdx}
+                          title={hasCycle ? '#CYCLE!' : undefined} // Tooltip for cycles
+                        >
+                          {hasCycle && (
+                            <span className="absolute right-0 top-0 w-0 h-0 border-t-4 border-r-4 border-red-600" /> // Red triangle for cycles
+                          )}
                           {editing ? (
                             <input
                               className="w-full h-full text-center outline-none"

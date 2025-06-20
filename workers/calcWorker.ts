@@ -41,14 +41,19 @@ async function evaluateFormula(formula: string, scope: Record<string, any>): Pro
     return coerce(result);
   } catch (error) {
     if (error.message.includes("Undefined symbol")) {
-      return toExcelError("REF"); // e.g., #REF! for missing references
+      return toExcelError("REF");
     }
-    return toExcelError("ERROR"); // Generic error
+    return toExcelError("ERROR");
   }
 }
 
 const depGraph = new DepGraph();
 const cellFormulas = new Map<string, string>();
+const listeners = new Set<(ids: string[]) => void>(); // For cycle event listeners
+
+function emitCycle(ids: string[]) {
+  listeners.forEach((cb) => cb(ids));
+}
 
 function getDescendants(cell: string): string[] {
   const visited = new Set<string>();
@@ -93,12 +98,18 @@ const api = {
     depGraph.addNode(cell);
     cellFormulas.set(cell, formula);
     deps.forEach((dep) => depGraph.addEdge(dep, cell));
+    const cycleCells = depGraph.getCycles().flat();
+    if (cycleCells.length > 0) {
+      emitCycle(cycleCells); // Emit cycle event
+    }
     console.log(`Worker set: ${cell} = ${formula}`);
   },
   removeFormula: (cell: string) => {
     if (cellFormulas.has(cell)) {
       depGraph.removeNode(cell);
       cellFormulas.delete(cell);
+      const cycleCells = depGraph.getCycles().flat();
+      emitCycle(cycleCells); // Emit cycle event
     }
   },
   getDescendants: (cell: string) => getDescendants(cell),
@@ -116,9 +127,19 @@ const api = {
   batch: async (items: { id: string; formula: string; scope: Record<string, any> }[]) => {
     const results: Record<string, ExcelValue> = {};
     for (const item of items) {
-      results[item.id] = await evaluateFormula(item.formula, item.scope);
+      if (depGraph.isInCycle(item.id)) {
+        results[item.id] = toExcelError('CYCLE'); // Return #CYCLE! for cyclic cells
+      } else {
+        results[item.id] = await evaluateFormula(item.formula, item.scope);
+      }
     }
     return results;
+  },
+  onCycle: (cb: (ids: string[]) => void) => {
+    listeners.add(cb); // Register cycle listener
+  },
+  offCycle: (cb: (ids: string[]) => void) => {
+    listeners.delete(cb); // Unregister cycle listener
   },
 };
 

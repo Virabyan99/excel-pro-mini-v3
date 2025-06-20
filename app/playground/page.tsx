@@ -9,8 +9,8 @@ export default function Playground() {
   useEffect(() => {
     (async () => {
       const worker = await getCalcWorker();
-      await worker.registerEdges('sheet!A2', ['sheet!A1']);
-      const order = await worker.getRecalcOrder();
+      await worker.registerEdges('R1C0', ['R0C0']); // A2 depends on A1
+      const order = await worker.getRecalcOrder(['R0C0']);
       setResult(`Recalc order: ${order.join(', ')}`);
     })();
   }, []);

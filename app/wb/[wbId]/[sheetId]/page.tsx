@@ -1,4 +1,4 @@
-import { Sheet } from '@/components/Sheet';
+import { SheetWrapper } from '@/components/SheetWrapper';
 
 export const runtime = 'edge';
 
@@ -10,7 +10,7 @@ export default async function SheetPage({ params }: PageProps) {
   const { wbId, sheetId } = await params;
   return (
     <main className="flex min-h-screen items-start justify-center p-8">
-      <Sheet sheetId={`${wbId}/${sheetId}`} />
+      <SheetWrapper sheetId={`${wbId}/${sheetId}`} />
     </main>
   );
 }

@@ -119,77 +119,81 @@ export function Sheet({ sheetId, className }: SheetProps) {
 
   const [isSelecting, setIsSelecting] = useState(false)
 
-  const handleColResize = (colIndex: number, e: React.MouseEvent) => {
-    e.stopPropagation()
-    const startX = e.clientX
-    const startWidth = colWidths[colIndex] ?? columns[colIndex].size
-    let currentWidth = startWidth
+const handleColResize = (colIndex: number, e: React.MouseEvent) => {
+  if (typeof window === 'undefined') return; // Skip on server
+  e.stopPropagation();
+  const startX = e.clientX;
+  const startWidth = colWidths[colIndex] ?? columns[colIndex].size;
+  let currentWidth = startWidth;
 
-    const throttledSetColWidth = throttle((newWidth: number) => {
-      currentWidth = newWidth
-      setColWidth(colIndex, newWidth)
-    }, 16)
+  const throttledSetColWidth = throttle((newWidth: number) => {
+    currentWidth = newWidth;
+    setColWidth(colIndex, newWidth);
+  }, 16);
 
-    const onMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.max(48, startWidth + (e.clientX - startX))
-      throttledSetColWidth(newWidth)
-    }
+  const onMouseMove = (e: MouseEvent) => {
+    const newWidth = Math.max(48, startWidth + (e.clientX - startX));
+    throttledSetColWidth(newWidth);
+  };
 
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-      setColWidth(colIndex, currentWidth)
-    }
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    setColWidth(colIndex, currentWidth);
+  };
 
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+};
 
-  const handleRowResize = (rowIndex: number, e: React.MouseEvent) => {
-    e.stopPropagation()
-    const startY = e.clientY
-    const startHeight = rowHeights[rowIndex] ?? 32
-    let currentHeight = startHeight
+const handleRowResize = (rowIndex: number, e: React.MouseEvent) => {
+  if (typeof window === 'undefined') return; // Skip on server
+  e.stopPropagation();
+  const startY = e.clientY;
+  const startHeight = rowHeights[rowIndex] ?? 32;
+  let currentHeight = startHeight;
 
-    const throttledSetRowHeight = throttle((newHeight: number) => {
-      currentHeight = newHeight
-      setRowHeight(rowIndex, newHeight)
-    }, 16)
+  const throttledSetRowHeight = throttle((newHeight: number) => {
+    currentHeight = newHeight;
+    setRowHeight(rowIndex, newHeight);
+  }, 16);
 
-    const onMouseMove = (e: MouseEvent) => {
-      const newHeight = Math.max(24, startHeight + (e.clientY - startY))
-      throttledSetRowHeight(newHeight)
-    }
+  const onMouseMove = (e: MouseEvent) => {
+    const newHeight = Math.max(24, startHeight + (e.clientY - startY));
+    throttledSetRowHeight(newHeight);
+  };
 
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-      setRowHeight(rowIndex, currentHeight)
-    }
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    setRowHeight(rowIndex, currentHeight);
+  };
 
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+};
 
-  const autoSizeCol = (colIndex: number) => {
-    const cells = document.querySelectorAll(`td[data-col='${colIndex}']`)
-    let max = 48
-    cells.forEach((c) => {
-      const w = (c as HTMLElement).scrollWidth + 16
-      if (w > max) max = w
-    })
-    setColWidth(colIndex, max)
-  }
+const autoSizeCol = (colIndex: number) => {
+  if (typeof window === 'undefined') return; // Skip on server
+  const cells = document.querySelectorAll(`td[data-col='${colIndex}']`);
+  let max = 48;
+  cells.forEach((c) => {
+    const w = (c as HTMLElement).scrollWidth + 16;
+    if (w > max) max = w;
+  });
+  setColWidth(colIndex, max);
+};
 
-  const autoSizeRow = (rowIndex: number) => {
-    const cells = document.querySelectorAll(`td[data-row='${rowIndex}']`)
-    let max = 24
-    cells.forEach((c) => {
-      const h = (c as HTMLElement).scrollHeight + 8
-      if (h > max) max = h
-    })
-    setRowHeight(rowIndex, max)
-  }
+const autoSizeRow = (rowIndex: number) => {
+  if (typeof window === 'undefined') return; // Skip on server
+  const cells = document.querySelectorAll(`td[data-row='${rowIndex}']`);
+  let max = 24;
+  cells.forEach((c) => {
+    const h = (c as HTMLElement).scrollHeight + 8;
+    if (h > max) max = h;
+  });
+  setRowHeight(rowIndex, max);
+}
 
   const isSelected = (row: number, col: number) => {
     if (!selection.start || !selection.end || col === 0) return false

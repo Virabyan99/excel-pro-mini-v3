@@ -1,69 +1,75 @@
-import { createStore } from 'zustand'
-import { devtools } from 'zustand/middleware'
-import { immer } from 'zustand/middleware/immer'
-import { produceWithPatches, applyPatches, Patch, enablePatches } from 'immer';
+import { createStore } from 'zustand';
+import { devtools } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import { produceWithPatches, applyPatches, Patch, enablePatches, enableMapSet } from 'immer';
 
 enablePatches();
+enableMapSet();
 
-// Define Slices (unchanged)
 interface WorkbookSlice {
-  workbooks: Record<string, unknown>
+  workbooks: Record<string, unknown>;
 }
 
 interface UiSlice {
-  theme: 'light' | 'dark'
+  theme: 'light' | 'dark';
 }
 
 interface GridSlice {
-  rows: { id: number; cells: string[] }[]
+  rows: { id: number; cells: string[] }[];
 }
 
 interface SelectionSlice {
   selection: {
-    start: { row: number; col: number } | null
-    end: { row: number; col: number } | null
-  }
+    start: { row: number; col: number } | null;
+    end: { row: number; col: number } | null;
+  };
   setSelection: (selection: {
-    start: { row: number; col: number }
-    end: { row: number; col: number }
-  }) => void
+    start: { row: number; col: number };
+    end: { row: number; col: number };
+  }) => void;
 }
 
 interface EditingSlice {
-  editingCell: { row: number; col: number } | null
-  setEditingCell: (rc: { row: number; col: number } | null) => void
-  setCellValue: (rc: { row: number; col: number; value: string }) => void
+  editingCell: { row: number; col: number } | null;
+  setEditingCell: (rc: { row: number; col: number } | null) => void;
+  setCellValue: (rc: { row: number; col: number; value: string }) => void;
 }
 
 interface DimensionSlice {
-  colWidths: Record<number, number>
-  rowHeights: Record<number, number>
-  setColWidth: (idx: number, px: number) => void
-  setRowHeight: (idx: number, px: number) => void
+  colWidths: Record<number, number>;
+  rowHeights: Record<number, number>;
+  setColWidth: (idx: number, px: number) => void;
+  setRowHeight: (idx: number, px: number) => void;
 }
 
 interface HistoryEntry {
-  patches: Patch[]
-  inverse: Patch[]
+  patches: Patch[];
+  inverse: Patch[];
 }
 
 interface UndoSlice {
-  history: HistoryEntry[]
-  future: HistoryEntry[]
-  undo: () => void
-  redo: () => void
+  history: HistoryEntry[];
+  future: HistoryEntry[];
+  undo: () => void;
+  redo: () => void;
 }
 
-// Combine all slices into RootState (removed 'withHistory' from UndoSlice)
+interface CalcSlice {
+  formulas: Record<string, string>;
+  dirty: Set<string>;
+  markDirty: (id: string) => void;
+  clearDirty: () => void;
+}
+
 export type RootState = WorkbookSlice &
   UiSlice &
   GridSlice &
   SelectionSlice &
   EditingSlice &
   DimensionSlice &
-  UndoSlice
+  UndoSlice &
+  CalcSlice;
 
-// Initial state for SSR (removed 'withHistory' from omission)
 export const initialState: Omit<
   RootState,
   | 'setSelection'
@@ -73,6 +79,8 @@ export const initialState: Omit<
   | 'setRowHeight'
   | 'undo'
   | 'redo'
+  | 'markDirty'
+  | 'clearDirty'
 > = {
   workbooks: {},
   theme: 'light',
@@ -83,9 +91,10 @@ export const initialState: Omit<
   rowHeights: {},
   history: [],
   future: [],
-}
+  formulas: {},
+  dirty: new Set(),
+};
 
-// Define withHistory to pass draft explicitly
 const withHistory =
   (set: any, get: any) =>
   <T extends (params: any) => void>(
@@ -96,29 +105,28 @@ const withHistory =
         const [next, patches, inverse] = produceWithPatches(
           state,
           (draft: any) => {
-            fn(draft, params)
+            fn(draft, params);
           }
-        )
+        );
         if (patches.length) {
-          state.history.push({ patches, inverse })
-          if (state.history.length > 100) state.history.shift()
-          state.future = []
-          Object.assign(state, next)
+          state.history.push({ patches, inverse });
+          if (state.history.length > 100) state.history.shift();
+          state.future = [];
+          Object.assign(state, next);
         }
-      })
-    }) as T
-  }
+      });
+    }) as T;
+  };
 
-// Root State Initializer
 const rootInitializer = (set: any, get: any) => {
-  const withHistoryWrapper = withHistory(set, get)
+  const withHistoryWrapper = withHistory(set, get);
 
   return {
     ...initialState,
     setRows: (rows: { id: number; cells: string[] }[]) => set({ rows }),
     setSelection: (selection: {
-      start: { row: number; col: number }
-      end: { row: number; col: number }
+      start: { row: number; col: number };
+      end: { row: number; col: number };
     }) => set({ selection }),
     setEditingCell: (rc: { row: number; col: number } | null) =>
       set({ editingCell: rc }),
@@ -127,44 +135,56 @@ const rootInitializer = (set: any, get: any) => {
         draft: any,
         { row, col, value }: { row: number; col: number; value: string }
       ) => {
-        draft.rows[row].cells[col] = value
+        const cellId = `R${row}C${col}`;
+        if (value.startsWith('=')) {
+          draft.formulas[cellId] = value;
+          draft.dirty.add(cellId);
+        } else {
+          draft.rows[row].cells[col] = value;
+          if (draft.formulas[cellId]) {
+            delete draft.formulas[cellId];
+          }
+          draft.dirty.add(cellId);
+        }
+        console.log('Set:', { cellId, value, formulas: draft.formulas, dirty: draft.dirty }); // Added console log
       }
     ),
     setColWidth: (idx: number, px: number) =>
       set((state: RootState) => {
-        state.colWidths[idx] = px
+        state.colWidths[idx] = px;
       }),
     setRowHeight: (idx: number, px: number) =>
       set((state: RootState) => {
-        state.rowHeights[idx] = px
+        state.rowHeights[idx] = px;
       }),
     undo: () => {
-      const { history, future } = get()
-      if (!history.length) return
-      const last = history[history.length - 1]
+      const { history, future } = get();
+      if (!history.length) return;
+      const last = history[history.length - 1];
       set((state: RootState) => {
-        state.history.pop()
-        state.future.push(last)
-        applyPatches(state, last.inverse)
-      })
+        state.history.pop();
+        state.future.push(last);
+        applyPatches(state, last.inverse);
+      });
     },
     redo: () => {
-      const { future } = get()
-      if (!future.length) return
-      const next = future[future.length - 1]
+      const { future } = get();
+      if (!future.length) return;
+      const next = future[future.length - 1];
       set((state: RootState) => {
-        state.future.pop()
-        state.history.push(next)
-        applyPatches(state, next.patches)
-      })
+        state.future.pop();
+        state.history.push(next);
+        applyPatches(state, next.patches);
+      });
     },
-  }
-}
+    markDirty: (id: string) => set((state: RootState) => void state.dirty.add(id)),
+    clearDirty: () => set((state: RootState) => void state.dirty.clear()),
+  };
+};
 
-// Create Store with DevTools and Immer
 const enhancer =
   process.env.NODE_ENV === 'development'
     ? (config: any) => devtools(immer(config))
-    : immer
+    : immer;
 
-export const createRootStore = () => createStore(enhancer(rootInitializer))
+export const createRootStore = () => createStore(enhancer(rootInitializer));

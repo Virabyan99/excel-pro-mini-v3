@@ -10,7 +10,7 @@ export function DemoDataLoader() {
     const numCols = 50;
     const demo = Array.from({ length: numRows }, (_, r) => ({
       id: r,
-      cells: Array.from({ length: numCols }, (_, c) => `R${r + 1}C${c + 1}`),
+      cells: Array.from({ length: numCols }, () => ''), // Initialize cells as empty strings
     }));
     setRows(demo);
   }, [setRows]);

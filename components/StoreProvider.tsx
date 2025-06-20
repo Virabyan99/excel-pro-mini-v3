@@ -25,8 +25,15 @@ export function useStore<T>(selector: (state: RootState) => T): T {
   return useSyncExternalStore(
     store.subscribe,
     () => selector(store.getState()),
-    () => selector(initialState) // Provide initial state for SSR
+    () => selector(initialState)
   );
+}
+
+// Hook for accessing the store object
+export function useStoreObject(): StoreApi<RootState> {
+  const store = useContext(StoreContext);
+  if (!store) throw new Error('StoreProvider missing above in React tree');
+  return store;
 }
 
 // Hook for accessing actions
